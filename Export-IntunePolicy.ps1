@@ -75,11 +75,18 @@
     )
 
     begin {
-        Write-Output "Collecting Intune Configuration Profiles"
+        Write-Output "Starting Intune policy export"
         $parameters = $PSBoundParameters
         [System.Collections.ArrayList]$configurationPolicies = @()
         $modules = @("Microsoft.Graph.Authentication", "Microsoft.Graph.Intune")
         $successful = $false
+    }
+
+    process {
+        if ($PSVersionTable.PSEdition -ne 'Core') {
+            Write-Output "You need to run this script using PowerShell core due to dependencies."
+            return
+        }
 
         try {
             if (-NOT(Test-Path -Path $LoggingPath)) {
@@ -91,50 +98,54 @@
         }
         catch {
             Write-Output "Error: $_"
+            return
         }
-    }
 
-    process {
         try {
             foreach ($module in $modules) {
                 if ($found = Get-Module -Name $module -ListAvailable | Sort-Object Version | Select-Object -First 1) {
-                    if (Import-Module -Name $found -ErrorAction Stop -PassThru -Verbose:$ShowModuleInfoInVerbose) {
+                    if (Import-Module -Name $found -ErrorAction Stop -Verbose:$ShowModuleInfoInVerbose -PassThru) {
                         Write-Verbose "$found imported!"
                         $successful = $true
                     }
                     else {
-                        Write-Verbose "Error importing $found"
-                        $successful = $false
+                        Throw "Error importing $($found). Please Run Export-IntunePolicy -Verbose -ShowModuleInfoInVerbose"
                     }
                 }
                 else {
                     Write-Output "$module not found! Installing module $($module) from the PowerShell Gallery"
-                    if (Install-Module -Name $module -Repository PSGallery -Force -PassThru -Verbose:$ShowModuleInfoInVerbose) {
+                    if (Install-Module -Name $module -Repository PSGallery -Force -Verbose:$ShowModuleInfoInVerbose -PassThru) {
                         Write-Verbose "$module installed successfully! Importing $($module)"
-                        if (Import-Module -Name $module -ErrorAction Stop -PassThru -Verbose:$ShowModuleInfoInVerbose) {
+                        if (Import-Module -Name $module -ErrorAction Stop -Verbose:$ShowModuleInfoInVerbose -PassThru) {
                             Write-Verbose "$module imported successfully!"
                             $successful = $true
                         }
                         else {
-                            Write-Verbose "Error importing $found"
-                            $successful = $false
+                            Throw "Error importing $($found). Please Run Export-IntunePolicy -Verbose -ShowModuleInfoInVerbose"
                         }
                     }
                 }
             }
+        }
+        catch {
+            Write-Output "Error: $_"
+            return
+        }
 
+        try {
             if ($successful) {
                 Select-MgProfile -Name "beta" -ErrorAction Stop
+                Write-Verbose "Using MGProfile (Beta)"
                 Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", "DeviceManagementServiceConfig.Read.All" -ForceRefresh -ErrorAction Stop
-                Write-Output "Connected to the Graph endpoint"
             }
             else {
-                Write-Output "Error: Unable to connect to the Graph endpoint"
+                Write-Output "Error: Unable to connect to the Graph endpoint. $_"
                 return
             }
         }
         catch {
             Write-Output "Error: $_"
+            return
         }
 
         try {
@@ -146,7 +157,7 @@
                 $uri = "https://graph.microsoft.com/beta/deviceManagement/$ResourceType"
             }
 
-            Write-Verbose "Connecting to the Graph API endpoint: $($uri)"
+            Write-Output "Querying Graph uri: $($uri)"
             if ($policies = Invoke-MgGraphRequest -Method GET -Uri $uri) {
                 foreach ($policy in $policies.value) {
                     $policyFound = [PSCustomObject]@{ PSTypeName = "Intune $ResourceType" }
@@ -218,6 +229,9 @@
     end {
         if (($parameters.ContainsKey('SaveResultsToCSV')) -or ($parameters.ContainsKey('SaveResultsToJSON'))) {
             Write-Output "`nResults exported to: $($LoggingPath)`nCompleted!"
+        }
+        else {
+            Write-Output "`nCompleted!"
         }
     }
 }

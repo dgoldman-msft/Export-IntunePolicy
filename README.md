@@ -3,6 +3,8 @@ Exports a number of Intune policies in csv and json format
 
 ## Getting Started with Export-IntunePolicy
 
+You must be running PowerShell 7 for this script to work due to dependencies.
+
 Running this script you agree to install Microsoft.Graph PowerShell modules and consent to permissions on your system so you can connect to GraphAPI to export Intune policy information
 
 ### DESCRIPTION
