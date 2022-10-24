@@ -46,6 +46,7 @@
 
         .NOTES
             https://learn.microsoft.com/en-us/powershell/microsoftgraph/get-started?view=graph-powershell-1.0
+            https://learn.microsoft.com/en-us/graph/api/resources/intune-shared-devicemanagement?view=graph-rest-beta
    #>
 
     [OutputType('PSCustomObject')]
@@ -80,6 +81,7 @@
         [System.Collections.ArrayList]$configurationPolicies = @()
         $modules = @("Microsoft.Graph.Authentication", "Microsoft.Graph.Intune")
         $successful = $false
+        $saveAsJson = $false
     }
 
     process {
@@ -169,6 +171,16 @@
                             $policyFound | Add-Member -MemberType NoteProperty -Name $policyItem.key -Value $policyItem.value
                         }
                     }
+
+                    # Pull the settings catalog for the policies
+                    if ($ResourceType -eq "configurationPolicies") {
+                        $uri = "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies('$($policy.id)')/settings"
+                        Write-Output "Querying Graph uri: $($uri) for policy settings"
+                        if ($policySettings = Invoke-MgGraphRequest -Method GET -Uri $uri) {
+                            $policyFound | Add-Member -MemberType NoteProperty -Name "Policy Settings" -Value ($policySettings)
+                        }
+                    }
+
                     $null = $configurationPolicies.add($policyFound)
                 }
             }
@@ -181,6 +193,26 @@
         }
 
         try {
+            if ($parameters.ContainsKey('SaveResultsToCSV')) {
+                if ($ResourceType -eq "configurationPolicies") {
+                    Write-Output "These policies will be to be saved in json format."
+                    $saveAsJson = $true
+                }
+                else {
+                    foreach ($policy in $configurationPolicies) {
+                        Write-Verbose "Saving $($policy.description + ".csv")"
+                        [PSCustomObject]$policy | Export-Csv -Path (Join-Path -Path $LoggingPath -ChildPath $($policy.description + ".csv")) -Encoding UTF8 -NoTypeInformation -ErrorAction Stop
+                    }
+                }
+            }
+
+            if ($parameters.ContainsKey('SaveResultsToJSON') -or ($saveAsJson)) {
+                foreach ($policy in $configurationPolicies) {
+                    Write-Verbose "Saving $($policy.description + ".json")"
+                    [PSCustomObject]$policy | ConvertTo-Json -Depth 10 | Set-Content (Join-Path -Path $LoggingPath -ChildPath $($policy.description + ".json")) -ErrorAction Stop -Encoding UTF8
+                }
+            }
+
             if ($parameters.ContainsKey('ShowFull')) {
                 [PSCustomObject]$configurationPolicies
             }
@@ -204,20 +236,6 @@
                     Update-TypeData @TypeData
                     [PSCustomObject]$configurationPolicies
                     Remove-TypeData -TypeName "Intune $ResourceType"
-                }
-            }
-
-            if ($parameters.ContainsKey('SaveResultsToCSV')) {
-                foreach ($policy in $configurationPolicies) {
-                    Write-Verbose "Saving $($policy.displayName + ".csv")"
-                    [PSCustomObject]$policy | Export-Csv -Path (Join-Path -Path $LoggingPath -ChildPath $($policy.displayName + ".csv")) -ErrorAction Stop -Encoding UTF8 -NoTypeInformation -Append
-                }
-            }
-
-            if ($parameters.ContainsKey('SaveResultsToJSON')) {
-                foreach ($policy in $configurationPolicies) {
-                    Write-Verbose "Saving $($policy.displayName + ".json")"
-                    [PSCustomObject]$policy | ConvertTo-Json -Depth 10 | Set-Content (Join-Path -Path $LoggingPath -ChildPath $($policy.displayName + ".json")) -ErrorAction Stop -Encoding UTF8
                 }
             }
         }
