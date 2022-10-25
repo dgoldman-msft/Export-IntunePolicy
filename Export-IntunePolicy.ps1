@@ -1,4 +1,80 @@
-﻿function Export-IntunePolicy {
+﻿function New-LoggingDirectory {
+    <#
+        .SYNOPSIS
+            Create directories
+
+        .DESCRIPTION
+            Create the root and all subfolder needed for logging
+
+        .PARAMETER LoggingPath
+            Logging Path
+
+        .PARAMETER SubFolder
+            Switch to indicated we are creating a subfolder
+
+        .PARAMETER SubFolderName
+            Subfolder Name
+
+        .EXAMPLE
+            An example
+
+        .NOTES
+            Internal function
+    #>
+
+    [OutputType('System.IO.Folder')]
+    [CmdletBinding()]
+    param(
+        [string]
+        $LoggingPath,
+
+        [switch]
+        $SubFolder,
+
+        [string]
+        $SubFolderName
+    )
+
+    begin {
+        if (-NOT($SubFolder)) {
+            Write-Verbose "Creating directory: $($LoggingPath)"
+        }
+        else {
+            Write-Verbose "Creating directory: $LoggingPath\$SubFolderName)"
+        }
+    }
+
+    process {
+        try {
+            # Leaving this here in case the root directory gets deleted between executions so we will re-create it again
+            if (-NOT(Test-Path -Path $LoggingPath)) {
+                if (New-Item -Path $LoggingPath -ItemType Directory -ErrorAction Stop) {
+                    Write-Verbose "$LoggingPath directory created!"
+                }
+                else {
+                    Write-Verbose "$($LoggingPath) already exists!"
+                }
+            }
+            if ($SubFolder) {
+                if (-NOT(Test-Path -Path $LoggingPath\$SubFolderName)) {
+                    if (New-Item -Path $LoggingPath\$SubFolderName -ItemType Directory -ErrorAction Stop) {
+                        Write-Verbose "$LoggingPath\$SubFolderName directory created!"
+                    }
+                    else {
+                        Write-Verbose "$($SubFolderName) already exists!"
+                    }
+                }
+            }
+        }
+        catch {
+            Write-Output "Error: $_"
+            return
+        }
+    }
+
+}
+
+function Export-IntunePolicy {
     <#
         .SYNOPSIS
             Export Intune Policies
@@ -56,9 +132,9 @@
         [string]
         $LoggingPath = "$env:Temp\ExportedIntunePolicies",
 
-        [ValidateSet('configurationPolicies', 'deviceCompliancePolicies', 'deviceConfigurations', 'deviceEnrollmentConfigurations', `
-                'deviceEnrollmentPlatformRestriction', 'defaultManagedAppProtections', `
-                'mdmWindowsInformationProtectionPolicies', 'iosManagedAppProtections', 'managedAppPolicies' )]
+        [ValidateSet('configurationPolicies', 'deviceManagementScripts', 'deviceCompliancePolicies', 'deviceComplianceScripts', 'deviceConfigurations', `
+                'deviceEnrollmentConfigurations', 'defaultManagedAppProtections', `
+                'mdmWindowsInformationProtectionPolicies', 'iosManagedAppProtections', 'managedAppPolicies', 'roleAssignments', 'roleDefinitions', 'resourceOperations', 'vppTokens' )]
         [string]
         $ResourceType = "deviceCompliancePolicies",
 
@@ -90,18 +166,8 @@
             return
         }
 
-        try {
-            if (-NOT(Test-Path -Path $LoggingPath)) {
-                if (New-Item -Path $LoggingPath -ItemType Directory -ErrorAction Stop) {
-                    Write-Verbose "$LoggingPath directory created!"
-                }
-            }
-            Write-Verbose "$LoggingPath directory already exists!"
-        }
-        catch {
-            Write-Output "Error: $_"
-            return
-        }
+        # Create root directory
+        New-LoggingDirectory -LoggingPath $LoggingPath
 
         try {
             foreach ($module in $modules) {
@@ -138,7 +204,8 @@
             if ($successful) {
                 Select-MgProfile -Name "beta" -ErrorAction Stop
                 Write-Verbose "Using MGProfile (Beta)"
-                Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", "DeviceManagementServiceConfig.Read.All" -ForceRefresh -ErrorAction Stop
+                Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
+                    "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -ForceRefresh -ErrorAction Stop
             }
             else {
                 Write-Output "Error: Unable to connect to the Graph endpoint. $_"
@@ -151,7 +218,7 @@
         }
 
         try {
-            if (($ResourceType -eq 'iosManagedAppProtections') -or ($ResourceType -eq 'managedAppPolicies')`
+            if (($ResourceType -eq 'iosManagedAppProtections') -or ($ResourceType -eq 'managedAppPolicies') -or ($ResourceType -eq 'vppTokens')`
                     -or ($ResourceType -eq 'defaultManagedAppProtections') -or ($ResourceType -eq 'mdmWindowsInformationProtectionPolicies')) {
                 $uri = "https://graph.microsoft.com/beta/deviceAppManagement/$ResourceType"
             }
@@ -160,15 +227,15 @@
             }
 
             Write-Output "Querying Graph uri: $($uri)"
-            if ($policies = Invoke-MgGraphRequest -Method GET -Uri $uri) {
+            if ($policies = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop) {
                 foreach ($policy in $policies.value) {
                     $policyFound = [PSCustomObject]@{ PSTypeName = "Intune $ResourceType" }
                     foreach ($policyItem in $policy.GetEnumerator()) {
                         if (($policyItem.Key -eq 'validOperatingSystemBuildRanges') -or ($policyItem.Key -eq 'roleScopeTagIds')) {
-                            $policyFound | Add-Member -MemberType NoteProperty -Name $policyItem.key -Value ($policyItem.Value -Join ',')
+                            $policyFound | Add-Member -MemberType NoteProperty -Name $policyItem.key -Value ($policyItem.Value -Join ',') -ErrorAction Stop
                         }
                         else {
-                            $policyFound | Add-Member -MemberType NoteProperty -Name $policyItem.key -Value $policyItem.value
+                            $policyFound | Add-Member -MemberType NoteProperty -Name $policyItem.key -Value $policyItem.value -ErrorAction Stop
                         }
                     }
 
@@ -176,16 +243,15 @@
                     if ($ResourceType -eq "configurationPolicies") {
                         $uri = "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies('$($policy.id)')/settings"
                         Write-Output "Querying Graph uri: $($uri) for policy settings"
-                        if ($policySettings = Invoke-MgGraphRequest -Method GET -Uri $uri) {
-                            $policyFound | Add-Member -MemberType NoteProperty -Name "Policy Settings" -Value ($policySettings)
+                        if ($policySettings = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop) {
+                            $policyFound | Add-Member -MemberType NoteProperty -Name "Policy Settings" -Value ($policySettings) -ErrorAction Stop
                         }
                     }
-
                     $null = $configurationPolicies.add($policyFound)
                 }
             }
             else {
-                Write-Output "No Graph results returned!"
+                Write-Output "No results returned!"
             }
         }
         catch {
@@ -193,31 +259,76 @@
         }
 
         try {
+            # If no data was found then bail out
+            if ($configurationPolicies.count -eq 0) {
+                Write-Output "Not data found!"
+                return
+            }
+
             if ($parameters.ContainsKey('SaveResultsToCSV')) {
-                if ($ResourceType -eq "configurationPolicies") {
-                    Write-Output "These policies will be to be saved in json format."
+                # These do not format well in CSV and json is a much better choice to get all details
+                if ($ResourceType -eq 'configurationPolicies|roleDefinitions|roleAssignments|resourceOperations') {
+                    Write-Output "$($ResourceType) need to be saved in json format to retail all formatting and data."
                     $saveAsJson = $true
                 }
                 else {
                     foreach ($policy in $configurationPolicies) {
+                        New-LoggingDirectory -LoggingPath $LoggingPath -SubFolder $ResourceType
                         Write-Verbose "Saving $($policy.description + ".csv")"
-                        [PSCustomObject]$policy | Export-Csv -Path (Join-Path -Path $LoggingPath -ChildPath $($policy.description + ".csv")) -Encoding UTF8 -NoTypeInformation -ErrorAction Stop
+                        [PSCustomObject]$policy | Export-Csv -Path (Join-Path -Path $LoggingPath\$ResourceType -ChildPath $($policy.description + ".csv")) -Encoding UTF8 -NoTypeInformation -ErrorAction Stop
                     }
                 }
             }
 
             if ($parameters.ContainsKey('SaveResultsToJSON') -or ($saveAsJson)) {
                 foreach ($policy in $configurationPolicies) {
-                    Write-Verbose "Saving $($policy.description + ".json")"
-                    [PSCustomObject]$policy | ConvertTo-Json -Depth 10 | Set-Content (Join-Path -Path $LoggingPath -ChildPath $($policy.description + ".json")) -ErrorAction Stop -Encoding UTF8
+                    New-LoggingDirectory -LoggingPath $LoggingPath -SubFolder $ResourceType
+                    switch -wildcard ($ResourceType) {
+                        'res*' {
+                            $policyName = $policy.resourceName
+                            [PSCustomObject]$policy | ConvertTo-Json -Depth 10 | Set-Content (Join-Path -Path $LoggingPath\$ResourceType -ChildPath $($policyName + ".json")) -ErrorAction Stop -Encoding UTF8
+                            Write-Verbose "Saving $($policyName + ".json")"
+                        }
+
+                        Default {
+                            [PSCustomObject]$policy | ConvertTo-Json -Depth 10 | Set-Content (Join-Path -Path $LoggingPath\$ResourceType -ChildPath $($policy.description + ".json")) -ErrorAction Stop -Encoding UTF8
+                            Write-Verbose "Saving $($policy.description + ".json")"
+                        }
+                    }
+
                 }
             }
 
+            # Display to the console results
             if ($parameters.ContainsKey('ShowFull')) {
                 [PSCustomObject]$configurationPolicies
             }
-            else {
-                if ($ResourceType -eq 'configurationPolicies') {
+
+            # Switch based on resource type and display with a custom view
+            switch -Wildcard ($ResourceType) {
+                'resourceOperations' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'resourceName', 'id', 'actionName'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+                'role*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'displayName', 'id'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+                'config*' {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
                         DefaultDisplayPropertySet = 'name', 'id', 'createdDateTime', 'lastModifiedDateTime'
@@ -225,10 +336,10 @@
                     Update-TypeData @TypeData
                     [PSCustomObject]$configurationPolicies
                     Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
                 }
-                if (($ResourceType -eq 'deviceCompliancePolicies') -or
-                ($ResourceType -eq 'deviceConfigurations') -or
-                (($ResourceType -eq 'deviceEnrollmentConfigurations'))) {
+
+                Default {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
                         DefaultDisplayPropertySet = 'displayName', 'id', 'createdDateTime', 'lastModifiedDateTime'
@@ -236,6 +347,7 @@
                     Update-TypeData @TypeData
                     [PSCustomObject]$configurationPolicies
                     Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
                 }
             }
         }
@@ -245,11 +357,11 @@
     }
 
     end {
-        if (($parameters.ContainsKey('SaveResultsToCSV')) -or ($parameters.ContainsKey('SaveResultsToJSON'))) {
+        if (($configurationPolicies.Count -gt 0) -and ($parameters.ContainsKey('SaveResultsToCSV') -or ($parameters.ContainsKey('SaveResultsToJSON')))) {
             Write-Output "`nResults exported to: $($LoggingPath)`nCompleted!"
         }
         else {
-            Write-Output "`nCompleted!"
+            Write-Output "Completed!"
         }
     }
 }
