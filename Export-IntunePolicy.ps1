@@ -132,9 +132,10 @@ function Export-IntunePolicy {
         [string]
         $LoggingPath = "$env:Temp\ExportedIntunePolicies",
 
-        [ValidateSet('configurationPolicies', 'deviceManagementScripts', 'deviceCompliancePolicies', 'deviceComplianceScripts', 'deviceConfigurations', `
-                'deviceEnrollmentConfigurations', 'defaultManagedAppProtections', `
-                'mdmWindowsInformationProtectionPolicies', 'iosManagedAppProtections', 'managedAppPolicies', 'roleAssignments', 'roleDefinitions', 'resourceOperations', 'vppTokens' )]
+        [ValidateSet('androidManagedAppProtections', 'configurationPolicies', 'deviceManagementScripts', 'deviceCompliancePolicies', 'deviceComplianceScripts', 'deviceConfigurations', `
+                'deviceEnrollmentConfigurations', 'defaultManagedAppProtections', 'deviceManagementPartners', 'importedWindowsAutopilotDeviceIdentities', 'iosManagedAppProtections', `
+                'iosUpdateStatuses', 'managedAppPolicies', 'managedAppRegistrations', 'mdmWindowsInformationProtectionPolicies', 'roleAssignments', 'roleDefinitions', 'resourceOperations',`
+                'softwareUpdateStatusSummary', 'vppTokens', 'windowsAutopilotDeviceIdentities' )]
         [string]
         $ResourceType = "deviceCompliancePolicies",
 
@@ -219,7 +220,8 @@ function Export-IntunePolicy {
 
         try {
             if (($ResourceType -eq 'iosManagedAppProtections') -or ($ResourceType -eq 'managedAppPolicies') -or ($ResourceType -eq 'vppTokens')`
-                    -or ($ResourceType -eq 'defaultManagedAppProtections') -or ($ResourceType -eq 'mdmWindowsInformationProtectionPolicies')) {
+                    -or ($ResourceType -eq 'defaultManagedAppProtections') -or ($ResourceType -eq 'mdmWindowsInformationProtectionPolicies')`
+                    -or ($ResourceType -eq 'androidManagedAppProtections') -or $ResourceType -eq 'managedAppRegistrations') {
                 $uri = "https://graph.microsoft.com/beta/deviceAppManagement/$ResourceType"
             }
             else {
@@ -306,6 +308,50 @@ function Export-IntunePolicy {
 
             # Switch based on resource type and display with a custom view
             switch -Wildcard ($ResourceType) {
+                'config*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'name', 'id', 'createdDateTime', 'lastModifiedDateTime'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+                'deviceManagement*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'displayName', 'id', 'partnerAppType', 'isConfigured'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+                'importedWindowsAutopilot*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'serialNumber', 'id', 'hardwareIdentifier'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+                'iosUpdateStatuses*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'userName', 'id', 'osVersion', 'deviceModel', 'lastReportedDateTime'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
                 'resourceOperations' {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
@@ -328,10 +374,35 @@ function Export-IntunePolicy {
                     continue
                 }
 
-                'config*' {
+                'managedApp*' {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
-                        DefaultDisplayPropertySet = 'name', 'id', 'createdDateTime', 'lastModifiedDateTime'
+                        DefaultDisplayPropertySet = 'deviceName', 'deviceTag', 'createdDateTime', 'lastSyncDateTime'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+                'softwareUpdate*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'displayName', 'id', 'compliantDeviceCount', 'nonCompliantDeviceCount', 'errorDeviceCount'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
+
+
+
+                'windowsAutopilot*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'managedDeviceId', 'id', 'enrollmentState', 'serialNumber'
                     }
                     Update-TypeData @TypeData
                     [PSCustomObject]$configurationPolicies
