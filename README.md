@@ -11,20 +11,27 @@ Running this script you agree to install Microsoft.Graph PowerShell modules and 
 
 Connect using Graph API (Beta) and export Intune policies of choice. As of now these are the items that can be exported:
 
-    configurationPolicies - NOTE: These will be saved in json format and will not display property in csv format
+    androidManagedAppProtections
+    configurationPolicies
+    deviceManagementScripts
     deviceCompliancePolicies
+    deviceComplianceScripts
     deviceConfigurations
     deviceEnrollmentConfigurations
-    deviceEnrollmentPlatformRestriction
-    deviceManagementScripts
     defaultManagedAppProtections
-    mdmWindowsInformationProtectionPolicies
+    deviceManagementPartners
+    importedWindowsAutopilotDeviceIdentities
     iosManagedAppProtections
+    iosUpdateStatuses
     managedAppPolicies
+    managedAppRegistrations
+    mdmWindowsInformationProtectionPolicies
     roleAssignments
     roleDefinitions
     resourceOperations
+    softwareUpdateStatusSummary
     vppTokens
+    windowsAutopilotDeviceIdentities
 
 - EXAMPLE 1: PS C:\Export-IntunePolicy -ResourceType configurationPolicies
 
