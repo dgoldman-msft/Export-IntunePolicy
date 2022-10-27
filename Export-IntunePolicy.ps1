@@ -23,7 +23,7 @@
     #>
 
     [OutputType('System.IO.Folder')]
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [string]
         $LoggingPath,
@@ -429,6 +429,7 @@ function Export-IntunePolicy {
             Write-Output "`nResults exported to: $($LoggingPath)`nCompleted!"
         }
         else {
+            Disconnect-MgGraph
             Write-Output "Completed!"
         }
     }
