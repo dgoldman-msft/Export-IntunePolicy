@@ -396,9 +396,6 @@ function Export-IntunePolicy {
                     continue
                 }
 
-
-
-
                 'windowsAutopilot*' {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
