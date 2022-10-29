@@ -16,7 +16,7 @@
             Subfolder Name
 
         .EXAMPLE
-            An example
+            PS C:\New-LoggingDirectory -SubFolder SubFolderName
 
         .NOTES
             Internal function
@@ -129,12 +129,19 @@ function Export-IntunePolicy {
     [CmdletBinding()]
     [Alias('ExportIP')]
     param(
+        [ValidateSet('Global', 'GCC', 'DOD')]
+        [parameter(Position = 0)]
+        [string]
+        $Endpoint = 'Global',
+
+        [parameter(Position = 1)]
         [string]
         $LoggingPath = "$env:Temp\ExportedIntunePolicies",
 
+        [parameter(Position = 2)]
         [ValidateSet('androidManagedAppProtections', 'configurationPolicies', 'deviceManagementScripts', 'deviceCompliancePolicies', 'deviceComplianceScripts', 'deviceConfigurations', `
                 'deviceEnrollmentConfigurations', 'defaultManagedAppProtections', 'deviceManagementPartners', 'importedWindowsAutopilotDeviceIdentities', 'iosManagedAppProtections', `
-                'iosUpdateStatuses', 'managedAppPolicies', 'managedAppRegistrations', 'mdmWindowsInformationProtectionPolicies', 'roleAssignments', 'roleDefinitions', 'resourceOperations',`
+                'iosUpdateStatuses', 'managedAppPolicies', 'managedAppRegistrations', 'mdmWindowsInformationProtectionPolicies', 'roleAssignments', 'roleDefinitions', 'resourceOperations', `
                 'softwareUpdateStatusSummary', 'vppTokens', 'windowsAutopilotDeviceIdentities' )]
         [string]
         $ResourceType = "deviceCompliancePolicies",
@@ -205,8 +212,18 @@ function Export-IntunePolicy {
             if ($successful) {
                 Select-MgProfile -Name "beta" -ErrorAction Stop
                 Write-Verbose "Using MGProfile (Beta)"
-                Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
-                    "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -ForceRefresh -ErrorAction Stop
+                If ($Endpoint -eq 'Global') {
+                    Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
+                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment Global -ForceRefresh -ErrorAction Stop
+                }
+                if ($Endpoint -eq 'GCC') {
+                    Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
+                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment USGov -ForceRefresh -ErrorAction Stop
+                }
+                if ($Endpoint -eq 'Dod') {
+                    Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
+                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment USGovDoD -ForceRefresh -ErrorAction Stop
+                }
             }
             else {
                 Write-Output "Error: Unable to connect to the Graph endpoint. $_"
@@ -222,10 +239,38 @@ function Export-IntunePolicy {
             if (($ResourceType -eq 'iosManagedAppProtections') -or ($ResourceType -eq 'managedAppPolicies') -or ($ResourceType -eq 'vppTokens')`
                     -or ($ResourceType -eq 'defaultManagedAppProtections') -or ($ResourceType -eq 'mdmWindowsInformationProtectionPolicies')`
                     -or ($ResourceType -eq 'androidManagedAppProtections') -or $ResourceType -eq 'managedAppRegistrations') {
-                $uri = "https://graph.microsoft.com/beta/deviceAppManagement/$ResourceType"
+
+
+                switch ($Endpoint) {
+                    'Global' {
+                        $uri = "https://graph.microsoft.com/beta/deviceAppManagement/$ResourceType"
+                        continue
+                    }
+                    'GCC' {
+                        $uri = "https://graph.microsoft.us/beta/deviceAppManagement/$ResourceType"
+                        continue
+                    }
+                    'DoD' {
+                        $uri = "https://dod-graph.microsoft.us/beta/deviceAppManagement/$ResourceType"
+                        continue
+                    }
+                }
             }
             else {
-                $uri = "https://graph.microsoft.com/beta/deviceManagement/$ResourceType"
+                switch ($Endpoint) {
+                    'Global' {
+                        $uri = "https://graph.microsoft.com/beta/deviceManagement/$ResourceType"
+                        continue
+                    }
+                    'GCC' {
+                        $uri = "https://graph.microsoft.us/beta/deviceManagement/$ResourceType"
+                        continue
+                    }
+                    'DoD' {
+                        $uri = "https://dod-graph.microsoft.us/beta/deviceManagement/$ResourceType"
+                        continue
+                    }
+                }
             }
 
             Write-Output "Querying Graph uri: $($uri)"
@@ -429,7 +474,7 @@ function Export-IntunePolicy {
             Write-Output "`nResults exported to: $($LoggingPath)`nCompleted!"
         }
         else {
-            Disconnect-MgGraph
+            $null = Disconnect-MgGraph
             Write-Output "Completed!"
         }
     }
