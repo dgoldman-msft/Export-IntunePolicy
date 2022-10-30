@@ -33,6 +33,8 @@ Connect using Graph API (Beta) and export Intune policies of choice. As of now t
     vppTokens
     windowsAutopilotDeviceIdentities
 
+### Examples
+
 - EXAMPLE 1: PS C:\Export-IntunePolicy -ResourceType configurationPolicies
 
     Retrieves Intune configurationPolicies and displays them in a limited custom formatted view
