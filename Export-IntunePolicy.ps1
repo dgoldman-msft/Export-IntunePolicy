@@ -142,7 +142,7 @@ function Export-IntunePolicy {
         [ValidateSet('androidManagedAppProtections', 'configurationPolicies', 'deviceManagementScripts', 'deviceCompliancePolicies', 'deviceComplianceScripts', 'deviceConfigurations', `
                 'deviceEnrollmentConfigurations', 'defaultManagedAppProtections', 'deviceManagementPartners', 'importedWindowsAutopilotDeviceIdentities', 'iosManagedAppProtections', `
                 'iosUpdateStatuses', 'managedAppPolicies', 'managedAppRegistrations', 'mdmWindowsInformationProtectionPolicies', 'roleAssignments', 'roleDefinitions', 'resourceOperations', `
-                'softwareUpdateStatusSummary', 'vppTokens', 'windowsAutopilotDeviceIdentities' )]
+                'softwareUpdateStatusSummary', 'templates', 'vppTokens', 'windowsAutopilotDeviceIdentities' )]
         [string]
         $ResourceType = "deviceCompliancePolicies",
 
@@ -246,7 +246,6 @@ function Export-IntunePolicy {
                     -or ($ResourceType -eq 'defaultManagedAppProtections') -or ($ResourceType -eq 'mdmWindowsInformationProtectionPolicies')`
                     -or ($ResourceType -eq 'androidManagedAppProtections') -or $ResourceType -eq 'managedAppRegistrations') {
 
-
                 switch ($Endpoint) {
                     'Global' {
                         $uri = "https://graph.microsoft.com/beta/deviceAppManagement/$ResourceType"
@@ -328,7 +327,7 @@ function Export-IntunePolicy {
                     foreach ($policy in $configurationPolicies) {
                         New-LoggingDirectory -LoggingPath $LoggingPath -SubFolder $ResourceType
                         Write-Verbose "Saving $($policy.description + ".csv")"
-                        [PSCustomObject]$policy | Export-Csv -Path (Join-Path -Path $LoggingPath\$ResourceType -ChildPath $($policy.description + ".csv")) -Encoding UTF8 -NoTypeInformation -ErrorAction Stop
+                        [PSCustomObject]$policy | Export-Csv -Path (Join-Path -Path $LoggingPath\$ResourceType -ChildPath $($policy.displayName + ".csv")) -Encoding UTF8 -NoTypeInformation -ErrorAction Stop
                     }
                 }
             }
@@ -403,6 +402,17 @@ function Export-IntunePolicy {
                     continue
                 }
 
+                'managedApp*' {
+                    $TypeData = @{
+                        TypeName                  = "Intune $ResourceType"
+                        DefaultDisplayPropertySet = 'deviceName', 'deviceTag', 'createdDateTime', 'lastSyncDateTime'
+                    }
+                    Update-TypeData @TypeData
+                    [PSCustomObject]$configurationPolicies
+                    Remove-TypeData -TypeName "Intune $ResourceType"
+                    continue
+                }
+
                 'resourceOperations' {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
@@ -418,17 +428,6 @@ function Export-IntunePolicy {
                     $TypeData = @{
                         TypeName                  = "Intune $ResourceType"
                         DefaultDisplayPropertySet = 'displayName', 'id'
-                    }
-                    Update-TypeData @TypeData
-                    [PSCustomObject]$configurationPolicies
-                    Remove-TypeData -TypeName "Intune $ResourceType"
-                    continue
-                }
-
-                'managedApp*' {
-                    $TypeData = @{
-                        TypeName                  = "Intune $ResourceType"
-                        DefaultDisplayPropertySet = 'deviceName', 'deviceTag', 'createdDateTime', 'lastSyncDateTime'
                     }
                     Update-TypeData @TypeData
                     [PSCustomObject]$configurationPolicies
