@@ -216,19 +216,17 @@ function Export-IntunePolicy {
 
         try {
             if ($successful) {
-                Select-MgProfile -Name "beta" -ErrorAction Stop
-                Write-Verbose "Using MGProfile (Beta)"
                 If ($Endpoint -eq 'Global') {
                     Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
-                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment Global -ForceRefresh -ErrorAction Stop
+                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment Global -ErrorAction Stop
                 }
                 if ($Endpoint -eq 'GCC') {
                     Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
-                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment USGov -ForceRefresh -ErrorAction Stop
+                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment USGov -ErrorAction Stop
                 }
                 if ($Endpoint -eq 'Dod') {
                     Connect-MgGraph -Scopes "User.Read.All", "DeviceManagementApps.Read.All", "DeviceManagementConfiguration.Read.All", `
-                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment USGovDoD -ForceRefresh -ErrorAction Stop
+                        "DeviceManagementRBAC.Read.All", "DeviceManagementServiceConfig.Read.All" -Environment USGovDoD -ErrorAction Stop
                 }
             }
             else {
@@ -477,9 +475,9 @@ function Export-IntunePolicy {
     end {
         if (($configurationPolicies.Count -gt 0) -and ($parameters.ContainsKey('SaveResultsToCSV') -or ($parameters.ContainsKey('SaveResultsToJSON')))) {
             Write-Output "`nResults exported to: $($LoggingPath)`nCompleted!"
+            Disconnect-MgGraph -ErrorAction SilentlyContinue
         }
         else {
-            $null = Disconnect-MgGraph
             Write-Output "Completed!"
         }
     }
